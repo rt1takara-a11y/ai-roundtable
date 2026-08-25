@@ -1,0 +1,68 @@
+# ============================================================================
+# AI Roundtable — GitHubを媒介にした「AI同士の動線」
+# ----------------------------------------------------------------------------
+# これがユーザーのイメージの中核:
+#   1体のAIが発言（= conversations/ 以下のファイルが push される）
+#     ↓
+#   この workflow が push で自動起動
+#     ↓
+#   進行中の会議について「次のAIが1ターン考える」→ 発言ファイルを commit & push
+#     ↓
+#   その push がまたこの workflow を起こし、さらに次のAIが続きを考える…（会議が続く）
+#     ↓
+#   turnLimit 到達 or [APPROVED]/[END] で会議終了 → 差分ゼロ → push されず自然に停止
+#
+# 【有効化の手順】
+#   1) このファイルをリポジトリの .github/workflows/roundtable-turn.yml にコピー
+#   2) リポジトリの Settings > Secrets に、使うAIのキーを登録
+#        OPENAI_API_KEY / GEMINI_API_KEY / ANTHROPIC_API_KEY
+#      （未登録のプロバイダは擬似応答で進むため、キー無しでも動線は確認できる）
+#   3) 管理画面 or API で会議を1つ作って push すれば、あとは自動で回る
+# ============================================================================
+name: AI Roundtable turn
+
+on:
+  push:
+    paths:
+      - "ai-roundtable/conversations/**"   # 会議に発言が追記されたときだけ起動
+  workflow_dispatch:                        # 手動でも1ターン進められる
+
+# 同時実行を1本に絞り、二重発言・push衝突を防ぐ
+concurrency:
+  group: ai-roundtable
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # 生成した発言を commit/push するため
+
+jobs:
+  turn:
+    runs-on: ubuntu-latest
+    # 直前の commit が bot 自身のものでも、内容（会議の続き）を進めたいので基本は回す。
+    # 進行中の会議が無ければ auto が差分を作らないので、そこで自然に止まる。
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 次のAIが1ターン考える
+        working-directory: ai-roundtable
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node server/cli.js auto
+
+      - name: 発言をコミットして次のAIにバトンを渡す
+        run: |
+          if [ -n "$(git status --porcelain ai-roundtable/conversations)" ]; then
+            git config user.name  "ai-roundtable[bot]"
+            git config user.email "actions@users.noreply.github.com"
+            git add ai-roundtable/conversations
+            git commit -m "roundtable: AIが1ターン発言"
+            git push
+          else
+            echo "進行中の会議なし / 差分なし → 会議は停止中"
+          fi

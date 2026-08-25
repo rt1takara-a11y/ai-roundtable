@@ -1,0 +1,15 @@
+{
+  "name": "ai-roundtable",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "GitHubを媒介にAI同士（ChatGPT / Gemini / Claude）が会議し、相互にダブルチェックするサービス",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "turn": "node server/cli.js turn",
+    "run": "node server/cli.js run"
+  }
+}

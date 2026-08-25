@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Roundtable — AI円卓会議</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%A3%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- サイドバー -->
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">🗣️</span>
+          <div>
+            <div class="brand-name">AI Roundtable</div>
+            <div class="brand-sub">AI円卓会議</div>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-item" data-view="dashboard">🏠 ダッシュボード</button>
+          <button class="nav-item" data-view="meeting">💬 会議ルーム</button>
+          <button class="nav-item" data-view="agents">🤖 エージェント</button>
+          <button class="nav-item" data-view="settings">🔑 APIキー設定</button>
+        </nav>
+
+        <div class="side-section">
+          <div class="side-title">最近の会議</div>
+          <div id="recent-list" class="recent-list"></div>
+        </div>
+
+        <div class="side-foot">
+          <span id="key-status" class="key-status">キー状態を確認中…</span>
+        </div>
+      </aside>
+
+      <!-- メイン -->
+      <main class="main">
+        <!-- ダッシュボード -->
+        <section class="view" id="view-dashboard">
+          <header class="view-head">
+            <h1>ダッシュボード</h1>
+            <p class="muted">GitHubを媒介に、AI同士が会議して相互チェックする司令塔。</p>
+          </header>
+
+          <div class="stats" id="stats"></div>
+
+          <div class="card new-meeting">
+            <h2>＋ 新しい会議を始める</h2>
+            <p class="muted small">依頼を書くと、参加AIが順番に発言し、互いの内容をチェックし合います。</p>
+            <div class="form-grid">
+              <label>テーマ / 依頼
+                <textarea id="nm-topic" rows="3" placeholder="例）この新機能の仕様に抜け漏れが無いか、3体で相互チェックして"></textarea>
+              </label>
+              <div class="row">
+                <label>進め方（モード）
+                  <select id="nm-mode">
+                    <option value="review">相互チェック（ダブルチェック）</option>
+                    <option value="collaborate">協働（一緒に作る）</option>
+                    <option value="debate">議論（賛否を戦わせる）</option>
+                  </select>
+                </label>
+                <label>AIターン上限
+                  <input id="nm-limit" type="number" value="6" min="1" max="12" />
+                </label>
+              </div>
+              <div>
+                <div class="label">参加させるAI</div>
+                <div id="nm-participants" class="chips"></div>
+              </div>
+              <button class="btn primary" id="nm-create">会議を作成してGitHubに記録</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 会議ルーム -->
+        <section class="view" id="view-meeting">
+          <header class="view-head meeting-head">
+            <div>
+              <h1 id="mtg-title">会議ルーム</h1>
+              <p class="muted small" id="mtg-topic"></p>
+            </div>
+            <div class="meeting-meta">
+              <span class="badge" id="mtg-mode"></span>
+              <span class="badge ghost" id="mtg-status"></span>
+            </div>
+          </header>
+
+          <div class="meeting-layout">
+            <div class="table-wrap">
+              <div class="round-table" id="round-table">
+                <div class="table-center">円卓</div>
+              </div>
+            </div>
+
+            <div class="chat-wrap">
+              <div class="chat" id="chat"></div>
+              <div class="typing" id="typing" hidden><span></span><span></span><span></span> 考え中…</div>
+              <div class="composer">
+                <div class="composer-actions">
+                  <button class="btn" id="btn-step">▶ 次の1人が発言</button>
+                  <button class="btn primary" id="btn-run">⏩ 自動で回す</button>
+                  <button class="btn ghost" id="btn-stop" hidden>■ 停止</button>
+                </div>
+                <div class="composer-input">
+                  <input id="human-input" placeholder="依頼者として口を挟む（任意）…" />
+                  <button class="btn" id="btn-say">送信</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- エージェント -->
+        <section class="view" id="view-agents">
+          <header class="view-head">
+            <h1>エージェント（参加AI）</h1>
+            <p class="muted">会議に参加するAIの人格・担当ロール・使うモデルを管理します。</p>
+          </header>
+          <div id="agents-list" class="agents-list"></div>
+          <button class="btn" id="btn-add-agent">＋ エージェントを追加</button>
+          <div class="actions-bar">
+            <button class="btn primary" id="btn-save-agents">変更を保存</button>
+            <span class="muted small" id="agents-saved"></span>
+          </div>
+        </section>
+
+        <!-- 設定 -->
+        <section class="view" id="view-settings">
+          <header class="view-head">
+            <h1>APIキー設定</h1>
+            <p class="muted">各社のAPIキーを登録すると、擬似応答から本物のAIに切り替わります。</p>
+          </header>
+          <div class="card notice">
+            🔒 キーはこのサーバーのローカル（<code>.data/secrets.json</code>）にのみ保存され、Gitにはコミットされません。
+            登録済みかどうかだけを表示し、キー本体は画面に返しません。
+          </div>
+          <div class="settings-grid" id="settings-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

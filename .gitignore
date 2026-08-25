@@ -1,0 +1,6 @@
+# APIキーなどの秘密情報（絶対にコミットしない）
+.data/
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
