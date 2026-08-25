@@ -1,0 +1,69 @@
+# ============================================================================
+# AI Roundtable — GitHubを媒介にした「AI同士の動線」
+# ----------------------------------------------------------------------------
+#   進行中の会議（conversations/）が push される
+#     ↓
+#   この workflow が起動し、参加AIが順番に発言（1ターンずつ commit）
+#     ↓
+#   turnLimit 到達 or [APPROVED]/[END] で会議終了 → まとめて push
+#
+# 【本物のAIにする】
+#   リポジトリ Settings > Secrets and variables > Actions に登録:
+#     OPENAI_API_KEY / GEMINI_API_KEY / ANTHROPIC_API_KEY
+#   未登録のプロバイダは擬似応答で進むため、キー無しでも動線は確認できる。
+#
+# 【メモ】GITHUB_TOKEN による push は次の workflow を再起動しない仕様のため、
+#   「1 push＝1ターンで連鎖」ではなく「1 起動で会議を最後まで進める」方式にしている。
+# ============================================================================
+name: AI Roundtable turn
+
+on:
+  push:
+    paths:
+      - "conversations/**"   # 会議に発言が追記されたときだけ起動
+  workflow_dispatch:          # 手動でも回せる
+
+concurrency:
+  group: ai-roundtable
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # 生成した発言を commit/push するため
+
+jobs:
+  turn:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 会議を進める（各ターンを個別コミット）
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          git config user.name  "ai-roundtable[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # 安全上限：1回の起動で進める最大ターン数（暴走・課金事故の保険）
+          for i in $(seq 1 20); do
+            node server/cli.js auto
+            # 進行中の会議が無ければ auto は何も書かない → 差分ゼロで終了
+            if [ -z "$(git status --porcelain conversations)" ]; then
+              echo "これ以上進める会議はありません。"
+              break
+            fi
+            git add conversations
+            git commit -m "roundtable: AIが発言 (turn $i)"
+          done
+
+      - name: まとめて push
+        run: |
+          if [ -n "$(git log --branches --not --remotes --oneline | head -1)" ]; then
+            git push
+          else
+            echo "push する新しいコミットはありません。"
+          fi
