@@ -1,0 +1,15 @@
+{
+  "id": "2026-08-25-e07bc2f4",
+  "title": "店舗マニュアルAIの初回リリース仕様",
+  "topic": "店舗マニュアルをスタッフがAIに聞ける機能。初回リリースの範囲・安全網・検証方法を4ロールで相互チェックして確定したい。",
+  "participants": [
+    "planner",
+    "critic",
+    "builder",
+    "facilitator"
+  ],
+  "mode": "review",
+  "status": "done",
+  "turnLimit": 8,
+  "createdAt": "2026-08-25T08:46:48.759Z"
+}

@@ -1,0 +1,522 @@
+<title>AI円卓会議リプレイ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+/>
+<style>
+  /* ── 単一世界（ライブ配信プレイヤー）に意図的にコミット。全色を明示塗り。 ── */
+  :root {
+    --ground: #0e1016;
+    --ground-2: #0b0d12;
+    --panel: #161a24;
+    --panel-2: #1b2030;
+    --line: #262c3b;
+    --line-soft: #1f2431;
+    --text: #e9ecf4;
+    --muted: #8b93a7;
+    --muted-2: #626a7e;
+    --indigo: #7c93ff;
+    --indigo-deep: #5468d8;
+    --planner: #e08a63;
+    --critic: #4fb3a1;
+    --builder: #6c8cff;
+    --facilitator: #b98bff;
+    --approve: #34d399;
+    --fix: #fbbf24;
+    --live: #ff5a5f;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --display: "Sora", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+    --jp: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+      "Yu Gothic", Meiryo, system-ui, sans-serif;
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 520px at 78% -8%, #1a2036 0%, rgba(26, 32, 54, 0) 60%),
+      var(--ground);
+    color: var(--text);
+    font-family: var(--jp);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 22px 20px 64px; }
+
+  /* ── トップバー（配信ヘッダー） ── */
+  .topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 18px;
+    background: linear-gradient(180deg, rgba(27, 32, 48, 0.85), rgba(22, 26, 36, 0.85));
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    backdrop-filter: blur(6px);
+    position: sticky; top: 12px; z-index: 20;
+  }
+  .live {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    letter-spacing: 0.12em; color: var(--live);
+    border: 1px solid rgba(255, 90, 95, 0.4); border-radius: 999px;
+    padding: 5px 11px 5px 9px; white-space: nowrap;
+  }
+  .live .rec {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--live);
+    box-shadow: 0 0 0 0 rgba(255, 90, 95, 0.6); animation: pulse 1.6s infinite;
+  }
+  .topbar .titles { flex: 1; min-width: 0; }
+  .topbar .eyebrow {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--muted-2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .topbar h1 {
+    margin: 1px 0 0; font-family: var(--display); font-weight: 600;
+    font-size: clamp(15px, 2.4vw, 19px); letter-spacing: 0.01em;
+    text-wrap: balance; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .clock {
+    font-family: var(--mono); font-size: 13px; color: var(--muted);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+
+  /* ── 進捗バー ── */
+  .progress {
+    height: 3px; margin: 10px 4px 16px; border-radius: 999px;
+    background: var(--line-soft); overflow: hidden;
+  }
+  .progress > i {
+    display: block; height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--indigo-deep), var(--indigo));
+    transition: width 0.5s ease;
+  }
+
+  /* ── 駆動バッジ ── */
+  .driver {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 4px 18px;
+    font-size: 12px; color: var(--muted);
+  }
+  .driver .now {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--facilitator);
+    border: 1px solid rgba(185, 139, 255, 0.4); background: rgba(185, 139, 255, 0.08);
+    border-radius: 999px; padding: 4px 11px;
+  }
+  .driver .plug { display: inline-flex; align-items: center; gap: 6px; opacity: 0.75; }
+  .driver .plug b { color: var(--muted); font-weight: 500; }
+  .driver .p { font-family: var(--mono); font-size: 11px; border: 1px dashed var(--line); border-radius: 999px; padding: 3px 9px; color: var(--muted-2); }
+
+  /* ── ステージ（円卓 + 進行） ── */
+  .stage { display: grid; grid-template-columns: 250px 1fr; gap: 20px; align-items: start; }
+
+  .table-card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 16px 14px; position: sticky; top: 92px;
+  }
+  .table-card .lbl {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--muted-2); text-align: center; margin-bottom: 8px;
+  }
+  .round {
+    position: relative; width: 218px; height: 218px; margin: 4px auto 6px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 38%, #212942 0%, #10131c 72%);
+    border: 1px solid var(--line);
+  }
+  .round .core {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--muted-2);
+  }
+  .seat { position: absolute; width: 66px; text-align: center; transform: translate(-50%, -50%); }
+  .seat .av {
+    width: 44px; height: 44px; border-radius: 50%; margin: 0 auto 5px;
+    display: grid; place-items: center; font-family: var(--display); font-weight: 700;
+    font-size: 13px; color: #0b0d12; border: 2px solid transparent; transition: 0.25s;
+  }
+  .seat .nm { font-size: 11px; color: var(--text); font-weight: 600; }
+  .seat .ro { font-size: 10px; color: var(--muted); }
+  .seat.speaking .av { border-color: #fff; transform: scale(1.12); box-shadow: 0 0 0 5px rgba(255,255,255,0.1); }
+  .seat.speaking .nm { color: #fff; }
+
+  .roster { margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
+  .rmini { display: flex; align-items: center; gap: 9px; font-size: 12px; }
+  .rmini .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .rmini .rl { color: var(--muted); margin-left: auto; font-size: 11px; }
+
+  /* ── トランスクリプト ── */
+  .feed-card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); min-height: 460px; display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .feed-head {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .chip {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+    padding: 4px 10px; border-radius: 999px; color: var(--indigo);
+    border: 1px solid rgba(124, 147, 255, 0.35); background: rgba(124, 147, 255, 0.08);
+  }
+  .feed-head .mode { color: var(--muted); font-size: 12px; }
+  .feed { padding: 16px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; max-height: 60vh; }
+
+  .row { display: flex; gap: 11px; opacity: 0; transform: translateY(8px); }
+  .row.in { opacity: 1; transform: none; transition: opacity 0.45s ease, transform 0.45s ease; }
+  .row .av {
+    width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    font-family: var(--display); font-weight: 700; font-size: 12px; color: #0b0d12; margin-top: 2px;
+  }
+  .bubble {
+    background: var(--panel-2); border: 1px solid var(--line-soft);
+    border-radius: 13px; padding: 10px 14px; max-width: 620px;
+  }
+  .meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+  .meta .who { font-weight: 600; font-size: 13px; }
+  .meta .role { font-size: 11px; color: var(--muted); }
+  .meta .ts { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--muted-2); font-variant-numeric: tabular-nums; }
+  .body { font-size: 14px; }
+  .row.human { flex-direction: row-reverse; }
+  .row.human .av { background: var(--indigo); color: #fff; font-size: 15px; }
+  .row.human .bubble { background: rgba(124, 147, 255, 0.1); border-color: rgba(124, 147, 255, 0.28); }
+  .row.human .meta .ts { margin-left: 0; margin-right: auto; }
+
+  .tag { font-family: var(--mono); font-weight: 600; font-size: 11.5px; padding: 1px 7px; border-radius: 6px; margin-left: 2px; white-space: nowrap; }
+  .tag.fix { color: var(--fix); background: rgba(251, 191, 36, 0.12); }
+  .tag.ok { color: var(--approve); background: rgba(52, 211, 153, 0.14); }
+  .tag.end { color: var(--muted); background: rgba(139, 147, 167, 0.12); }
+
+  /* タイピング */
+  .typing { display: flex; align-items: center; gap: 10px; padding: 2px 16px 10px; color: var(--muted); font-size: 12px; }
+  .typing .av { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 10px; color: #0b0d12; }
+  .dots { display: inline-flex; gap: 4px; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+  .dots i:nth-child(2) { animation-delay: 0.18s; }
+  .dots i:nth-child(3) { animation-delay: 0.36s; }
+
+  /* ── 成果物 ── */
+  .deliverable {
+    margin-top: 22px; border: 1px solid var(--line); border-radius: var(--radius);
+    background:
+      linear-gradient(180deg, rgba(124, 147, 255, 0.06), rgba(124, 147, 255, 0) 120px),
+      var(--panel);
+    overflow: hidden; opacity: 0; transform: translateY(14px);
+  }
+  .deliverable.in { opacity: 1; transform: none; transition: opacity 0.6s ease, transform 0.6s ease; }
+  .dl-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line-soft); }
+  .dl-head .badge {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--approve); border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 999px; padding: 4px 10px;
+  }
+  .dl-head h2 { margin: 0; font-family: var(--display); font-weight: 600; font-size: 17px; }
+  .dl-head .sub { font-size: 12px; color: var(--muted); }
+  .dl-head .stamp { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .spec { padding: 6px 20px 18px; }
+  .spec-row { display: grid; grid-template-columns: 132px 1fr; gap: 14px; padding: 13px 0; border-bottom: 1px solid var(--line-soft); }
+  .spec-row:last-child { border-bottom: 0; }
+  .spec-row .k { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.06em; color: var(--indigo); padding-top: 2px; }
+  .spec-row .v { font-size: 14px; }
+  .spec-row .v .note { color: var(--muted); font-size: 12.5px; }
+  .pill { display: inline-block; font-size: 12px; padding: 2px 9px; border-radius: 999px; margin: 2px 5px 2px 0; border: 1px solid var(--line); background: var(--panel-2); }
+  .pill.good { color: var(--approve); border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.08); }
+  .verdict { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--line-soft); background: rgba(52, 211, 153, 0.05); font-size: 13px; }
+  .verdict .checks { display: inline-flex; gap: 5px; margin-left: auto; }
+  .verdict .c { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; color: #0b0d12; font-weight: 700; }
+
+  /* ── コントロール ── */
+  .controls { display: flex; align-items: center; gap: 8px; }
+  .btn {
+    font-family: var(--display); font-weight: 600; font-size: 13px;
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    padding: 8px 13px; border-radius: 10px; cursor: pointer; transition: 0.15s;
+  }
+  .btn:hover { border-color: var(--indigo); }
+  .btn.primary { background: var(--indigo-deep); border-color: var(--indigo-deep); color: #fff; }
+  .btn:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+  .speed { font-family: var(--mono); font-size: 12px; color: var(--muted); border: 1px solid var(--line); background: var(--panel-2); border-radius: 10px; padding: 8px 11px; cursor: pointer; }
+
+  .footnote { margin: 18px 4px 0; font-size: 12px; color: var(--muted-2); font-family: var(--jp); line-height: 1.7; }
+  .footnote code { font-family: var(--mono); color: var(--muted); background: var(--panel-2); padding: 1px 6px; border-radius: 5px; }
+
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,90,95,0.55); } 70% { box-shadow: 0 0 0 7px rgba(255,90,95,0); } 100% { box-shadow: 0 0 0 0 rgba(255,90,95,0); } }
+  @keyframes blink { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .row, .deliverable { opacity: 1 !important; transform: none !important; transition: none !important; }
+    .live .rec, .dots i { animation: none !important; }
+  }
+
+  @media (max-width: 780px) {
+    .stage { grid-template-columns: 1fr; }
+    .table-card { position: static; }
+    .round { width: 200px; height: 200px; }
+    .topbar { flex-wrap: wrap; }
+    .controls { order: 3; width: 100%; }
+    .spec-row { grid-template-columns: 1fr; gap: 3px; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="topbar">
+    <span class="live"><span class="rec"></span>REC</span>
+    <div class="titles">
+      <div class="eyebrow">AI ROUNDTABLE · 4ロール相互チェック会議</div>
+      <h1>店舗マニュアルAI — 初回リリース仕様を確定する</h1>
+    </div>
+    <span class="clock" id="clock">00:00</span>
+    <div class="controls">
+      <button class="btn primary" id="play">⏸ 一時停止</button>
+      <button class="btn" id="restart">↻ 最初から</button>
+      <button class="speed" id="speed">1×</button>
+    </div>
+  </header>
+
+  <div class="progress"><i id="bar"></i></div>
+
+  <div class="driver">
+    <span class="now">● 現在の駆動：Claude（4ロール）</span>
+    <span class="plug"><b>接続可能：</b><span class="p">ChatGPT</span><span class="p">Gemini</span><span class="p">その他 API</span></span>
+    <span style="opacity:.7">— ロールごとに使うAIを差し替えできます</span>
+  </div>
+
+  <div class="stage">
+    <aside class="table-card">
+      <div class="lbl">参加ロール</div>
+      <div class="round" id="round"><div class="core">円卓</div></div>
+      <div class="roster" id="roster"></div>
+    </aside>
+
+    <section class="feed-card">
+      <div class="feed-head">
+        <span class="chip">MODE · 相互チェック</span>
+        <span class="mode" id="statusline">会議を開始しています…</span>
+      </div>
+      <div class="feed" id="feed"></div>
+      <div class="typing" id="typing" hidden>
+        <span class="av" id="typing-av"></span>
+        <span id="typing-name"></span>
+        <span class="dots"><i></i><i></i><i></i></span>
+      </div>
+    </section>
+  </div>
+
+  <section class="deliverable" id="deliverable" hidden>
+    <div class="dl-head">
+      <span class="badge">成果物 · 生成完了</span>
+      <div>
+        <h2>初回リリース仕様 v1</h2>
+        <div class="sub">4ロールのAIが相互チェックの末に合意した最終仕様</div>
+      </div>
+      <span class="stamp" id="stamp">— </span>
+    </div>
+    <div class="spec">
+      <div class="spec-row"><div class="k">目的</div><div class="v">新人が「同じ質問を人に聞かなくていい」状態をつくる。</div></div>
+      <div class="spec-row"><div class="k">対象範囲</div><div class="v">新人が<strong>最初の1週間で聞く頻出10問</strong>のみ。<span class="note">（全マニュアル網羅は過大 → 絞り込み）</span></div></div>
+      <div class="spec-row"><div class="k">回答形式</div><div class="v">回答＋<strong>必ず出典</strong>（マニュアルのページ／見出し）を併記。</div></div>
+      <div class="spec-row"><div class="k">安全網（必須）</div><div class="v">該当なし・曖昧なときは憶測で答えず<strong>「担当者に確認」へ誘導</strong>。<span class="note">＝ 誤答を出さない設計。</span></div></div>
+      <div class="spec-row"><div class="k">対象外（次回）</div><div class="v"><span class="pill">全マニュアル網羅</span><span class="pill">写真つき手順</span><span class="pill">多言語</span></div></div>
+      <div class="spec-row"><div class="k">検証方法</div><div class="v">スタッフ3名 × 1週間。指標＝<span class="pill good">誤答件数（目標 0）</span><span class="pill">"人に回した率"</span></div></div>
+    </div>
+    <div class="verdict">
+      <span>相互チェック結果：<strong>検証役が承認</strong>（過大な範囲・未定義の挙動・指標の欠落を、会議中に4ロールで修正）</span>
+      <span class="checks" id="verdict-checks"></span>
+    </div>
+  </section>
+
+  <p class="footnote" id="foot">
+    ● これは <strong>デモ再生（イメージ）</strong>です。会話は分かりやすさのために構成した台本で、実際のAI出力ではありません。
+    現在は <strong>Claude を4ロールに分けて</strong>相互チェックさせる構成で、<code>ANTHROPIC_API_KEY</code> を登録すると各ロールが実際に発言します。
+    各ロールの使用AIは差し替え可能で、<code>OPENAI_API_KEY</code>（ChatGPT）や <code>GEMINI_API_KEY</code>（Gemini）を足せば<strong>他社AIとの混成会議</strong>にもできます。
+  </p>
+</div>
+
+<script>
+  const AGENTS = {
+    human:       { name: "依頼者",         role: "オーナー",   ini: "👤", color: "var(--indigo)" },
+    planner:     { name: "プランナー",     role: "提案役",     ini: "Pl", color: "var(--planner)" },
+    critic:      { name: "クリティック",   role: "検証役",     ini: "Cr", color: "var(--critic)" },
+    builder:     { name: "ビルダー",       role: "実装役",     ini: "Bu", color: "var(--builder)" },
+    facilitator: { name: "ファシリテーター", role: "まとめ役", ini: "Fa", color: "var(--facilitator)" },
+  };
+  const SEATS = ["planner", "critic", "builder", "facilitator"];
+
+  // 台本：4ロールの相互チェックが「ミスを捕まえて」最終仕様に到達する流れ
+  const SCRIPT = [
+    { who: "human", text: "店舗マニュアルAIの初回リリース仕様を決めたい。範囲・リスク・検証方法を、4ロールで相互チェックして最終仕様までまとめて。" },
+    { who: "planner", text: "目的は『新人が同じ質問を人に聞かなくていい』状態づくり。たたき台として、いっそ全マニュアルをAIが答えられるようにして、写真つき手順も全部入れて初回から全店で使いましょう。" },
+    { who: "critic", text: "待ってください。3点リスクです。①全網羅は初回には過大でコストも精度も落ちる ②『答えが見つからない時の挙動』が未定義で誤答リスク ③効果を測る指標が無い。ここは詰めるべきです。", tag: "fix" },
+    { who: "builder", text: "指摘を反映して具体化します。範囲は『新人が最初の1週間で聞く頻出10問』に限定。回答には必ず出典ページを併記。該当が無い時は憶測せず『担当者に確認』へ誘導する挙動を実装します。" },
+    { who: "facilitator", text: "論点を整理します。範囲・出典・安全網は固まりました。残るは“効果の測り方”。ここを埋めれば確定できます。" },
+    { who: "critic", text: "検証は3名×1週間で“誤答件数”と“人に回した率”を計測、誤答は目標0件/週。範囲・安全網・指標・対象外がそろいました。これなら初回リリースとして妥当です。", tag: "ok" },
+    { who: "facilitator", text: "全ロールの合意が取れました。初回リリース仕様 v1として確定し、成果物にまとめます。", tag: "end" },
+  ];
+
+  const $ = (s) => document.querySelector(s);
+  const feed = $("#feed"), typing = $("#typing"), bar = $("#bar");
+  const clockEl = $("#clock"), statusline = $("#statusline");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const cssVar = (v) => v.startsWith("var(") ? getComputedStyle(document.documentElement).getPropertyValue(v.slice(4, -1)).trim() : v;
+
+  // 参加者UI（円卓 + ロスター）
+  (function buildParticipants() {
+    const round = $("#round"), R = 92, cx = 109, cy = 109;
+    SEATS.forEach((id, i) => {
+      const a = AGENTS[id];
+      const ang = (-90 + (360 / SEATS.length) * i) * Math.PI / 180;
+      const seat = document.createElement("div");
+      seat.className = "seat"; seat.id = "seat-" + id;
+      seat.style.left = cx + R * Math.cos(ang) + "px";
+      seat.style.top = cy + R * Math.sin(ang) + "px";
+      seat.innerHTML = `<div class="av" style="background:${cssVar(a.color)}">${a.ini}</div>
+        <div class="nm">${a.name}</div><div class="ro">${a.role}</div>`;
+      round.appendChild(seat);
+    });
+    const roster = $("#roster");
+    ["human", ...SEATS].forEach((id) => {
+      const a = AGENTS[id];
+      const row = document.createElement("div");
+      row.className = "rmini";
+      row.innerHTML = `<span class="dot" style="background:${cssVar(a.color)}"></span>
+        <span>${a.name}</span><span class="rl">${a.role}</span>`;
+      roster.appendChild(row);
+    });
+  })();
+
+  function fmt(s) { const m = Math.floor(s / 60), r = s % 60; return String(m).padStart(2, "0") + ":" + String(r).padStart(2, "0"); }
+  function tagHTML(t) {
+    if (t === "fix") return ' <span class="tag fix">要修正</span>';
+    if (t === "ok") return ' <span class="tag ok">✔ 承認</span>';
+    if (t === "end") return ' <span class="tag end">確定</span>';
+    return "";
+  }
+
+  // 疑似タイムスタンプ（会議の経過を演出）
+  let vClock = 0;
+  function stampFor(i) { vClock += 7 + i * 4; return fmt(vClock); }
+
+  // 再生制御
+  let state = { i: 0, playing: true, speed: 1, cancel: 0 };
+  const playBtn = $("#play"), speedBtn = $("#speed");
+
+  function setSpeaking(id) {
+    document.querySelectorAll(".seat").forEach((s) => s.classList.remove("speaking"));
+    if (id && id !== "human") $("#seat-" + id)?.classList.add("speaking");
+  }
+  const sleep = (ms, token) => new Promise((res) => {
+    const t = setTimeout(() => res(true), ms / state.speed);
+    const check = setInterval(() => { if (token !== state.cancel) { clearTimeout(t); clearInterval(check); res(false); } }, 40);
+  });
+  async function waitWhilePaused(token) {
+    while (!state.playing && token === state.cancel) { await new Promise((r) => setTimeout(r, 60)); }
+    return token === state.cancel;
+  }
+
+  function addMessage(step, i) {
+    const a = AGENTS[step.who];
+    const row = document.createElement("div");
+    row.className = "row " + (step.who === "human" ? "human" : "");
+    row.innerHTML = `
+      <div class="av" style="background:${cssVar(a.color)}">${a.ini}</div>
+      <div class="bubble">
+        <div class="meta"><span class="who">${a.name}</span><span class="role">${a.role}</span><span class="ts">${stampFor(i)}</span></div>
+        <div class="body">${step.text}${tagHTML(step.tag)}</div>
+      </div>`;
+    feed.appendChild(row);
+    requestAnimationFrame(() => row.classList.add("in"));
+    feed.scrollTo({ top: feed.scrollHeight, behavior: reduce ? "auto" : "smooth" });
+  }
+
+  function showTyping(id) {
+    const a = AGENTS[id];
+    $("#typing-av").textContent = a.ini;
+    $("#typing-av").style.background = cssVar(a.color);
+    $("#typing-name").textContent = a.name + " が考えています";
+    typing.hidden = false;
+    feed.scrollTo({ top: feed.scrollHeight, behavior: reduce ? "auto" : "smooth" });
+  }
+
+  function revealDeliverable() {
+    const dl = $("#deliverable");
+    dl.hidden = false;
+    $("#stamp").textContent = "確定 " + fmt(vClock + 6);
+    const checks = $("#verdict-checks");
+    SEATS.forEach((id) => {
+      const c = document.createElement("span");
+      c.className = "c"; c.textContent = "✓";
+      c.style.background = cssVar(AGENTS[id].color);
+      c.title = AGENTS[id].name + " 合意";
+      checks.appendChild(c);
+    });
+    requestAnimationFrame(() => dl.classList.add("in"));
+    if (!reduce) dl.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  async function play() {
+    const token = state.cancel;
+    for (let i = state.i; i < SCRIPT.length; i++) {
+      state.i = i;
+      if (!(await waitWhilePaused(token))) return;
+      const step = SCRIPT[i];
+      setSpeaking(step.who);
+      statusline.textContent = step.who === "human"
+        ? "依頼を受け付けました" : AGENTS[step.who].name + "（" + AGENTS[step.who].role + "）が発言中";
+
+      if (step.who !== "human") { showTyping(step.who); if (!(await sleep(950, token))) return; typing.hidden = true; }
+      if (!(await waitWhilePaused(token))) return;
+
+      addMessage(step, i);
+      bar.style.width = ((i + 1) / SCRIPT.length * 100) + "%";
+      clockEl.textContent = fmt(vClock);
+
+      if (!(await sleep(step.who === "human" ? 1200 : 1900, token))) return;
+    }
+    // 会議終了 → 成果物生成
+    setSpeaking(null);
+    statusline.textContent = "合意に到達 · 成果物を生成しました";
+    typing.hidden = true;
+    revealDeliverable();
+    playBtn.textContent = "↻ もう一度";
+    playBtn.dataset.ended = "1";
+    state.playing = false;
+  }
+
+  function restart() {
+    state.cancel++;
+    state = { i: 0, playing: true, speed: state.speed, cancel: state.cancel };
+    feed.innerHTML = ""; typing.hidden = true; bar.style.width = "0%";
+    vClock = 0; clockEl.textContent = "00:00";
+    const dl = $("#deliverable"); dl.classList.remove("in"); dl.hidden = true;
+    $("#verdict-checks").innerHTML = "";
+    setSpeaking(null);
+    playBtn.textContent = "⏸ 一時停止"; delete playBtn.dataset.ended;
+    play();
+  }
+
+  playBtn.addEventListener("click", () => {
+    if (playBtn.dataset.ended) { restart(); return; }
+    state.playing = !state.playing;
+    playBtn.textContent = state.playing ? "⏸ 一時停止" : "▶ 再生";
+    statusline.textContent = state.playing ? "再生中…" : "一時停止中";
+  });
+  $("#restart").addEventListener("click", restart);
+  speedBtn.addEventListener("click", () => {
+    state.speed = state.speed === 1 ? 2 : state.speed === 2 ? 0.5 : 1;
+    speedBtn.textContent = state.speed + "×";
+  });
+
+  // 起動：reduced-motion なら即時に全表示
+  if (reduce) {
+    SCRIPT.forEach((s, i) => addMessage(s, i));
+    bar.style.width = "100%"; clockEl.textContent = fmt(vClock);
+    statusline.textContent = "会議の記録（全文）";
+    revealDeliverable(); playBtn.textContent = "↻ もう一度"; playBtn.dataset.ended = "1"; state.playing = false;
+  } else {
+    play();
+  }
+</script>
